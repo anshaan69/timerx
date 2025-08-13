@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Timer with Changeable Background</title>
+  <style>
+    :root{
+      --glass: rgba(255,255,255,.2);
+      --glass-strong: rgba(255,255,255,.35);
+      --text: #111827;
+      --text-inv: #f9fafb;
+      --primary: #2563eb;
+      --danger: #ef4444;
+      --ok: #10b981;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text-inv);
+      background: #0f172a; /* fallback */
+      transition: background 600ms ease, background-image 600ms ease;
+    }
+    /* --- Layout --- */
+    .wrap{
+      min-height:100%;
+      display:grid;
+      grid-template-rows: 1fr auto;
+      background-position:center;
+      background-size:cover;
+      background-attachment: fixed;
+    }
+    .overlay{
+      background: radial-gradient(ellipse at top, rgba(0,0,0,.25), rgba(0,0,0,.55));
+      inset:0; position:fixed; pointer-events:none; z-index:0;
+      transition: background 300ms ease;
+    }
+    .container{
+      z-index:1;
+      padding: clamp(14px, 2vw, 24px);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .panel{
+      width:min(920px, 95vw);
+      display:grid; gap:18px;
+      grid-template-columns: 1fr;
+      backdrop-filter: blur(10px) saturate(120%);
+      background: var(--glass);
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .timer{
+      display:grid; gap: 10px; text-align:center;
+    }
+    .time{
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      font-size: clamp(42px, 10vw, 120px);
+      line-height: 1;
+      letter-spacing: .02em;
+      text-shadow: 0 6px 30px rgba(0,0,0,.45);
+    }
+    .inputs, .controls{
+      display:flex; flex-wrap: wrap; gap:10px; justify-content:center; align-items:center;
+    }
+    .inputs input[type="number"], .inputs input[type="text"], .inputs select{
+      appearance:none;
+      border:1px solid rgba(255,255,255,.4);
+      background: var(--glass-strong);
+      color: var(--text-inv);
+      border-radius: 12px;
+      padding: 10px 12px;
+      min-width: 90px;
+      font-size: 15px;
+      outline: none;
+    }
+    .inputs input[type="color"]{
+      width: 46px; height: 40px; border: none; background: transparent;
+      padding:0; border-radius: 10px; overflow:hidden;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
+    }
+    .btn{
+      border:0; cursor:pointer; padding:10px 14px; border-radius:12px; font-weight:600;
+      background: rgba(255,255,255,.9); color:#0b1220; transition: transform .07s ease, filter .2s;
+    }
+    .btn:hover{ filter:brightness(1.05) }
+    .btn:active{ transform: translateY(1px) }
+    .btn.primary{ background: var(--primary); color:white }
+    .btn.ok{ background: var(--ok); color:white }
+    .btn.danger{ background: var(--danger); color:white }
+    .pill{
+      font-size:12px; opacity:.85; padding:4px 10px; background: rgba(255,255,255,.2);
+      border:1px solid rgba(255,255,255,.3); border-radius:999px;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+    .grid{
+      display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .card{
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius:14px; padding: 12px;
+    }
+    label{ font-size:12px; text-transform: uppercase; letter-spacing:.08em; opacity:.9 }
+    .footer{ opacity:.8; font-size:12px; padding: 10px 0 18px; text-align:center }
+    a{ color:#c7d2fe }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="bgWrap">
+    <div class="overlay" id="overlay"></div>
+    <main class="container">
+      <section class="panel">
+        <div class="timer">
+          <div class="row" style="justify-content:center">
+            <span class="pill" id="statusPill">Ready</span>
+          </div>
+          <div class="time" id="time">00:00</div>
+          <div class="inputs">
+            <input id="mins" type="number" min="0" max="999" placeholder="Minutes" />
+            <input id="secs" type="number" min="0" max="59" placeholder="Seconds" />
+            <button class="btn ok" id="setBtn">Set</button>
+          </div>
+          <div class="controls">
+            <button class="btn primary" id="start">Start</button>
+            <button class="btn" id="pause">Pause</button>
+            <button class="btn danger" id="reset">Reset</button>
+            <button class="btn" id="lap">Lap</button>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card">
+            <label>Background Type</label>
+            <div class="row">
+              <select id="bgType">
+                <option value="color">Solid Color</option>
+                <option value="gradient">Gradient Preset</option>
+                <option value="image">Image URL / Upload</option>
+              </select>
+            </div>
+            <div class="row" id="bgColorRow">
+              <input type="color" id="bgColor" value="#0f172a" />
+              <button class="btn" id="randomColor">Random Color</button>
+            </div>
+            <div class="row" id="bgGradientRow" style="display:none">
+              <select id="gradientPreset"></select>
+            </div>
+            <div class="row" id="bgImageRow" style="display:none">
+              <input type="text" id="imageUrl" placeholder="Paste image URL..." style="flex:1" />
+              <input type="file" id="imageFile" accept="image/*" />
+            </div>
+            <div class="row">
+              <label for="dim">Dim Background</label>
+              <input type="range" id="dim" min="0" max="90" value="45" />
+            </div>
+          </div>
+
+          <div class="card">
+            <label>Laps</label>
+            <div id="laps" style="max-height:160px; overflow:auto; font-variant-numeric: tabular-nums;"></div>
+          </div>
+
+          <div class="card">
+            <label>Quick Presets</label>
+            <div class="row">
+              <button class="btn" data-preset="300">5:00</button>
+              <button class="btn" data-preset="600">10:00</button>
+              <button class="btn" data-preset="1500">25:00</button>
+              <button class="btn" data-preset="1800">30:00</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          Built with ❤️  – works offline, remembers your background.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // ===== Utilities =====
+    const qs = (sel, el=document) => el.querySelector(sel);
+    const qsa = (sel, el=document) => [...el.querySelectorAll(sel)];
+    const pad = n => String(n).padStart(2,'0');
+    const fmt = s => `${pad(Math.floor(s/60))}:${pad(Math.floor(s%60))}`;
+    const beep = () => { // simple WebAudio beep
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 880;
+      o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02);
+      o.start();
+      setTimeout(()=>{ g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1); o.stop(ctx.currentTime + 0.12); }, 450);
+    };
+
+    // ===== Elements =====
+    const timeEl = qs('#time');
+    const minsEl = qs('#mins');
+    const secsEl = qs('#secs');
+    const setBtn = qs('#setBtn');
+    const startBtn = qs('#start');
+    const pauseBtn = qs('#pause');
+    const resetBtn = qs('#reset');
+    const lapBtn = qs('#lap');
+    const statusPill = qs('#statusPill');
+    const lapsEl = qs('#laps');
+
+    const bgWrap = qs('#bgWrap');
+    const overlay = qs('#overlay');
+    const bgType = qs('#bgType');
+    const bgColor = qs('#bgColor');
+    const randomColor = qs('#randomColor');
+    const gradientPreset = qs('#gradientPreset');
+    const imageUrl = qs('#imageUrl');
+    const imageFile = qs('#imageFile');
+    const dim = qs('#dim');
+
+    const bgColorRow = qs('#bgColorRow');
+    const bgGradientRow = qs('#bgGradientRow');
+    const bgImageRow = qs('#bgImageRow');
+
+    // ===== State =====
+    let total = 0; // seconds remaining
+    let base = 0; // original set value
+    let tick = null;
+    let laps = [];
+
+    // ===== Background Presets =====
+    const gradients = [
+      ['Sunset', 'linear-gradient(135deg, #ff7e5f, #feb47b)'],
+      ['Aurora', 'linear-gradient(135deg, #00c6ff, #0072ff)'],
+      ['Tropical', 'linear-gradient(135deg, #00f260, #0575e6)'],
+      ['Candy', 'linear-gradient(135deg, #f090f3, #f5576c)'],
+      ['Forest', 'linear-gradient(135deg, #5aeea8, #005c46)'],
+      ['Dark Mesh', 'radial-gradient(circle at 20% -10%, #2dd4bf55, transparent 35%), radial-gradient(circle at 80% 110%, #a78bfa55, transparent 35%), #0f172a']
+    ];
+    gradients.forEach(([name, css])=>{
+      const opt = document.createElement('option');
+      opt.value = css; opt.textContent = name; gradientPreset.appendChild(opt);
+    });
+
+    function applyOverlay(v){
+      const opacity = Number(v)/100; // 0..0.9
+      overlay.style.background = `radial-gradient(ellipse at top, rgba(0,0,0,${opacity*0.5}), rgba(0,0,0,${opacity}))`;
+      localStorage.setItem('timer.dim', v);
+    }
+
+    function setBackground(mode){
+      const m = mode || localStorage.getItem('timer.bgMode') || 'color';
+      const dimVal = localStorage.getItem('timer.dim') || '45';
+      dim.value = dimVal; applyOverlay(dimVal);
+
+      if(m==='color'){
+        const c = bgColor.value || localStorage.getItem('timer.bgColor') || '#0f172a';
+        bgWrap.style.background = c; bgWrap.style.backgroundImage = 'none';
+        localStorage.setItem('timer.bgColor', c);
+      } else if(m==='gradient'){
+        const g = localStorage.getItem('timer.bgGradient') || gradients[0][1];
+        gradientPreset.value = g; bgWrap.style.background = g;
+      } else if(m==='image'){
+        const url = localStorage.getItem('timer.bgImage');
+        if(url){ bgWrap.style.backgroundImage = `url('${url}')`; bgWrap.style.backgroundSize='cover'; bgWrap.style.backgroundPosition='center'; }
+      }
+      localStorage.setItem('timer.bgMode', m);
+      bgType.value = m;
+      // Toggle rows
+      bgColorRow.style.display = m==='color' ? 'flex' : 'none';
+      bgGradientRow.style.display = m==='gradient' ? 'flex' : 'none';
+      bgImageRow.style.display = m==='image' ? 'flex' : 'none';
+    }
+
+    // ===== Timer Logic =====
+    function updateDisplay(){ timeEl.textContent = fmt(total); }
+
+    function setStatus(text){ statusPill.textContent = text; }
+
+    function start(){
+      if(total <= 0) return;
+      clearInterval(tick);
+      tick = setInterval(()=>{
+        total--; updateDisplay();
+        if(total <= 0){
+          clearInterval(tick); setStatus('Done');
+          timeEl.classList.add('pulse');
+          // triple beep
+          beep(); setTimeout(beep, 250); setTimeout(beep, 500);
+        }
+      }, 1000);
+      setStatus('Running');
+    }
+
+    function pause(){
+      clearInterval(tick); setStatus('Paused');
+    }
+
+    function reset(){
+      clearInterval(tick); total = base; updateDisplay(); setStatus('Ready');
+    }
+
+    function setFromInputs(){
+      const m = Math.max(0, parseInt(minsEl.value || '0', 10));
+      const s = Math.max(0, Math.min(59, parseInt(secsEl.value || '0', 10)));
+      base = total = m*60 + s; updateDisplay(); setStatus('Set');
+    }
+
+    function addLap(){
+      const elapsed = base - total; if(base===0) return;
+      laps.unshift({ n: laps.length+1, at: fmt(elapsed), remaining: fmt(total)});
+      renderLaps();
+    }
+
+    function renderLaps(){
+      if(!laps.length){ lapsEl.innerHTML = '<div style="opacity:.7">No laps yet</div>'; return; }
+      lapsEl.innerHTML = laps.map((l,i)=>`<div class="row" style="justify-content:space-between"><span>#${laps.length-i}</span><span>⏱ ${l.at}</span><span>left ${l.remaining}</span></div>`).join('');
+    }
+
+    // ===== Events =====
+    setBtn.addEventListener('click', setFromInputs);
+    startBtn.addEventListener('click', start);
+    pauseBtn.addEventListener('click', pause);
+    resetBtn.addEventListener('click', reset);
+    lapBtn.addEventListener('click', addLap);
+
+    qsa('[data-preset]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        base = total = parseInt(btn.dataset.preset, 10); updateDisplay(); setStatus('Set');
+      });
+    });
+
+    // Background controls
+    bgType.addEventListener('change', ()=>{ setBackground(bgType.value); });
+    bgColor.addEventListener('input', ()=>{ bgWrap.style.background = bgColor.value; localStorage.setItem('timer.bgColor', bgColor.value); });
+    gradientPreset.addEventListener('change', ()=>{ bgWrap.style.background = gradientPreset.value; localStorage.setItem('timer.bgGradient', gradientPreset.value); });
+    randomColor.addEventListener('click', ()=>{
+      const c = `#${Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0')}`;
+      bgColor.value = c; bgWrap.style.background = c; localStorage.setItem('timer.bgColor', c); setBackground('color');
+    });
+    imageUrl.addEventListener('change', ()=>{
+      const url = imageUrl.value.trim(); if(!url) return;
+      bgWrap.style.backgroundImage = `url('${url}')`; bgWrap.style.backgroundSize='cover'; bgWrap.style.backgroundPosition='center';
+      localStorage.setItem('timer.bgImage', url); setBackground('image');
+    });
+    imageFile.addEventListener('change', ()=>{
+      const file = imageFile.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = e => { const url = e.target.result; localStorage.setItem('timer.bgImage', url); setBackground('image'); };
+      reader.readAsDataURL(file);
+    });
+    dim.addEventListener('input', ()=> applyOverlay(dim.value));
+
+    // Keyboard
+    document.addEventListener('keydown', (e)=>{
+      if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+      if(e.code==='Space'){ e.preventDefault(); if(tick) pause(); else start(); }
+      if(e.key==='r' || e.key==='R'){ reset(); }
+      if(e.key==='l' || e.key==='L'){ addLap(); }
+    });
+
+    // Init
+    function init(){
+      renderLaps();
+      setBackground(localStorage.getItem('timer.bgMode') || 'color');
+      const savedColor = localStorage.getItem('timer.bgColor'); if(savedColor) bgColor.value = savedColor;
+      const savedGrad = localStorage.getItem('timer.bgGradient'); if(savedGrad) gradientPreset.value = savedGrad;
+      updateDisplay();
+    }
+    init();
+  </script>
+</body>
+</html>
